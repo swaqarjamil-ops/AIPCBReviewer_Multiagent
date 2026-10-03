@@ -6,6 +6,11 @@ provides the top-level `run_review()` function that app.py calls. All
 the "try this Gemini model, fall back to the next one if it's busy" logic
 lives in llm_utils.with_model_fallback and is reused for both the vision
 extraction step and the crew run itself.
+
+Per tasks.py, the crew now runs in three stages instead of five fully
+sequential steps - Component Locator, then Costing/Availability/
+Engineering IN PARALLEL, then Reporting - which is the main speedup over
+the previous fully-sequential version.
 """
 
 from crewai import Crew, Process

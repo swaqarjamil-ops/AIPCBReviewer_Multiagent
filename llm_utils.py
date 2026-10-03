@@ -69,8 +69,15 @@ def with_model_fallback(model_candidates: list[str], call_fn, status_callback=No
                 return result, model_name
             except Exception as exc:  # noqa: BLE001 - we want to catch & fall back on ANY provider error
                 last_error = exc
+                # A 404 ("model not found" / retired model) will NEVER
+                # succeed on retry - skip straight to the next model
+                # instead of burning time retrying something unfixable.
+                is_permanent_error = "404" in str(exc)
                 if status_callback:
-                    status_callback(f"⚠️ `{model_name}` failed ({exc}). Retrying/falling back...")
+                    reason = "model unavailable" if is_permanent_error else "retrying/falling back"
+                    status_callback(f"⚠️ `{model_name}` failed ({exc}). {reason}...")
+                if is_permanent_error:
+                    break
                 time.sleep(RETRY_BACKOFF_SECONDS)
     raise RuntimeError(
         f"All Gemini models in the fallback list failed. Last error: {last_error}"

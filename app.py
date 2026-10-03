@@ -31,7 +31,10 @@ from report_utils import REPORT_SECTIONS, split_report_into_sections
 # Default fallback chain: if the first model is busy/unavailable, the
 # app automatically retries then moves to the next one in this list.
 # Users can edit this in the sidebar without touching any code.
-DEFAULT_MODEL_CHAIN = "gemini-3-pro, gemini-3.5-flash, gemini-2.5-pro, gemini-2.5-flash"
+# NOTE: the Gemini 2.5 series (Pro/Flash/Flash-Lite) is being retired by
+# Google (Oct 20, 2026) and already returns 404 for new API keys - so the
+# chain below uses the current Gemini 3.x line instead.
+DEFAULT_MODEL_CHAIN = "gemini-3.1-pro, gemini-3.8-flash, gemini-3.5-flash, gemini-3.1-flash-lite"
 
 
 def configure_page():
@@ -151,8 +154,8 @@ def main():
             status_box.info(msg)
 
         try:
-            with st.spinner("Crew is working: locating parts, costing, checking availability, "
-                             "and running the deep engineering analysis..."):
+            with st.spinner("Crew is working: locating parts, then costing, availability, and "
+                             "the deep engineering analysis run in parallel..."):
                 results = run_review(
                     images=images,
                     api_key=settings["api_key"],

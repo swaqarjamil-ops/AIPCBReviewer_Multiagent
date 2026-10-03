@@ -1,18 +1,27 @@
 """
 tasks.py
 --------
-Defines the five tasks the crew runs, in sequential order. Each task is
-given the full schematic description text (from the Gemini vision
-extraction step) plus any extra context the user typed in, so every
-agent has the raw facts available even though they also receive each
-other's outputs via CrewAI's `context` chaining.
+Defines the five tasks the crew runs, structured as THREE STAGES instead
+of five fully sequential steps, to cut wall-clock time:
+
+    Stage 1 (sync):    Component Locator
+    Stage 2 (PARALLEL): Design Costing | Hardware Availability | Engineering Analyst
+    Stage 3 (sync):    Reporting Agent (waits for all of Stage 2)
+
+Costing, Availability, and Engineering Analyst only ever depended on the
+Component Locator's output, not on each other - they were being run one
+after another for no reason. Marking them `async_execution=True` lets
+CrewAI fire all three LLM calls at once and wait for them together,
+which is the single biggest lever on total run time for this crew.
+(CrewAI requires the crew to end with a synchronous task, which Reporting
+already is.)
 """
 
 from crewai import Agent, Task
 
 
 def build_tasks(agents: dict[str, Agent], schematic_description: str, extra_notes: str) -> list[Task]:
-    """Build the five sequential review tasks.
+    """Build the five review tasks across three execution stages.
 
     Args:
         agents: Dict of agents from agents.build_agents().
@@ -21,8 +30,10 @@ def build_tasks(agents: dict[str, Agent], schematic_description: str, extra_note
         extra_notes: Optional free-text context supplied by the user.
 
     Returns:
-        A list of Task objects in execution order, ready for a
-        Process.sequential Crew.
+        A list of Task objects, ready for a Process.sequential Crew.
+        The list order still matters (it's how CrewAI resolves
+        `context=[...]` references), but Costing/Availability/
+        Engineering now run concurrently rather than one at a time.
     """
     notes_block = f"\nAdditional context from the user:\n{extra_notes}\n" if extra_notes else ""
 
@@ -59,6 +70,7 @@ def build_tasks(agents: dict[str, Agent], schematic_description: str, extra_note
         ),
         agent=agents["design_costing"],
         context=[task_components],
+        async_execution=True,  # runs in parallel with Availability + Engineering
     )
 
     # --- Task 3: Hardware Availability --------------------------------------
@@ -77,6 +89,7 @@ def build_tasks(agents: dict[str, Agent], schematic_description: str, extra_note
         ),
         agent=agents["hardware_availability"],
         context=[task_components],
+        async_execution=True,  # runs in parallel with Costing + Engineering
     )
 
     # --- Task 4: Engineering Analyst (deep SI / power / coupling review) ---
@@ -112,6 +125,7 @@ def build_tasks(agents: dict[str, Agent], schematic_description: str, extra_note
         ),
         agent=agents["engineering_analyst"],
         context=[task_components],
+        async_execution=True,  # runs in parallel with Costing + Availability
     )
 
     # --- Task 5: Reporting Agent (final consolidated report) --------------
