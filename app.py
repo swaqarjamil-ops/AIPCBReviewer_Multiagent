@@ -10,16 +10,19 @@ Pipeline:
        description of the schematic (llm_utils.py).
     4. A 5-agent CrewAI crew - Component Locator, Design Costing,
        Hardware Availability, Engineering Analyst, Reporting Agent -
-       reasons over that description sequentially (agents.py, tasks.py,
-       crew.py).
+       reasons over that description (Costing/Availability/Engineering
+       run in parallel - see tasks.py), then Reporting consolidates
+       everything into one final report.
     5. Every Gemini call automatically retries and falls back across a
-       user-configurable list of models if one is busy/unavailable.
-    6. Results are shown as tabs, with a one-click markdown download.
+       fixed list of models if one is busy/unavailable/retired.
+    6. Each agent's result is shown in its own clearly labeled section
+       on the main page, plus a final consolidated report with a
+       one-click markdown download.
 
-Deployment: push this whole folder to a GitHub repo and deploy on
-Streamlit Community Cloud with app.py as the entry point. Users paste
-their own Gemini API key into the sidebar at runtime - no secret needs
-to live in the repo.
+No sidebar: there are no user-facing settings. The Gemini API key comes
+from Streamlit secrets (GEMINI_API_KEY), and the model fallback chain is
+a fixed constant below - see "Deployment" in README.md for how to set
+the secret on Streamlit Community Cloud.
 """
 
 import streamlit as st
@@ -28,21 +31,46 @@ from crew import run_review
 from pdf_utils import render_pdf_pages_to_images
 from report_utils import REPORT_SECTIONS, split_report_into_sections
 
-# Default fallback chain: if the first model is busy/unavailable, the
-# app automatically retries then moves to the next one in this list.
-# Users can edit this in the sidebar without touching any code.
-# NOTE: the Gemini 2.5 series (Pro/Flash/Flash-Lite) is being retired by
-# Google (Oct 20, 2026) and already returns 404 for new API keys - so the
-# chain below uses the current Gemini 3.x line instead.
-DEFAULT_MODEL_CHAIN = "gemini-3.1-pro, gemini-3.8-flash, gemini-3.5-flash, gemini-3.1-flash-lite"
+# Fixed fallback chain: if the first model is busy/unavailable/retired,
+# the app automatically retries then moves to the next one in this list.
+# There is no UI control for this - edit this constant and redeploy if
+# Google renames/retires a model.
+MODEL_CANDIDATES = [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+]
+
+# Fixed rendering quality for turning PDF pages into images (no sidebar
+# control for this - 2.0x gives a good sharpness/speed balance).
+RENDER_ZOOM = 2.0
+
+# Each entry: (results dict key, section title, icon).
+AGENT_SECTIONS = [
+    ("components", "Component Locator", "🔎"),
+    ("costing", "Design Costing", "💰"),
+    ("availability", "Hardware Availability", "📦"),
+    ("engineering", "Engineering Analyst", "🛠️"),
+]
 
 
 def configure_page():
-    """Set page-level Streamlit config and inject light custom styling."""
-    st.set_page_config(page_title="AI PCB Multi-Agent Reviewer", page_icon="🧠", layout="wide")
+    """Set page-level Streamlit config (sidebar collapsed/unused) and styling."""
+    st.set_page_config(
+        page_title="AI PCB Multi-Agent Reviewer",
+        page_icon="🧠",
+        layout="wide",
+        initial_sidebar_state="collapsed",  # app has no sidebar controls
+    )
     st.markdown(
         """
         <style>
+        /* Hide the sidebar and its expand arrow entirely - this app has
+           no sidebar controls, everything lives on the main page. */
+        [data-testid="stSidebar"], [data-testid="stSidebarCollapsedControl"] {
+            display: none;
+        }
         .main-title {
             font-size: 2.3rem;
             font-weight: 800;
@@ -63,43 +91,28 @@ def configure_page():
     )
 
 
-def render_sidebar() -> dict:
-    """Render sidebar controls and return the chosen settings."""
-    with st.sidebar:
-        st.header("⚙️ Settings")
-        api_key = st.text_input(
-            "Google Gemini API Key",
-            type="password",
-            help="From https://aistudio.google.com/apikey - used only for this session.",
-        )
-        model_chain_raw = st.text_input(
-            "Gemini model fallback chain",
-            value=DEFAULT_MODEL_CHAIN,
-            help="Comma-separated, tried in order. If a model is busy/unavailable, "
-                 "the app automatically retries then falls back to the next one.",
-        )
-        model_candidates = [m.strip() for m in model_chain_raw.split(",") if m.strip()]
+def get_api_key() -> str:
+    """Read the Gemini API key from Streamlit secrets.
 
-        zoom = st.slider(
-            "Rendering quality (zoom)", min_value=1.0, max_value=4.0, value=2.0, step=0.5,
-            help="Higher = sharper page images for the vision step, but slower/more tokens.",
-        )
+    Returns an empty string if the secret hasn't been configured, so the
+    caller can show a friendly setup message instead of crashing.
+    """
+    try:
+        return st.secrets.get("GEMINI_API_KEY", "")
+    except Exception:  # noqa: BLE001 - secrets.toml may not exist locally
+        return ""
 
-        st.markdown("---")
-        st.markdown(
-            "**Crew of 5 agents:**  \n"
-            '<span class="agent-pill">🔎 Component Locator</span>'
-            '<span class="agent-pill">💰 Design Costing</span>'
-            '<span class="agent-pill">📦 Hardware Availability</span>'
-            '<span class="agent-pill">🛠️ Engineering Analyst</span>'
-            '<span class="agent-pill">📝 Reporting Agent</span>',
-            unsafe_allow_html=True,
-        )
-        st.caption(
-            "Your schematic is sent directly to the Gemini API for analysis "
-            "and is not stored by this app."
-        )
-    return {"api_key": api_key, "model_candidates": model_candidates, "zoom": zoom}
+
+def render_agent_badges():
+    """Show a small row of pills listing the 5 crew agents, for context."""
+    st.markdown(
+        '<span class="agent-pill">🔎 Component Locator</span>'
+        '<span class="agent-pill">💰 Design Costing</span>'
+        '<span class="agent-pill">📦 Hardware Availability</span>'
+        '<span class="agent-pill">🛠️ Engineering Analyst</span>'
+        '<span class="agent-pill">📝 Reporting Agent</span>',
+        unsafe_allow_html=True,
+    )
 
 
 def main():
@@ -114,9 +127,17 @@ def main():
         'by Google Gemini.</p>',
         unsafe_allow_html=True,
     )
+    render_agent_badges()
     st.write("")
 
-    settings = render_sidebar()
+    api_key = get_api_key()
+    if not api_key:
+        st.error(
+            "No Gemini API key found. Add `GEMINI_API_KEY` to this app's "
+            "Streamlit secrets (Settings → Secrets on Streamlit Community "
+            "Cloud, or `.streamlit/secrets.toml` locally) and reload."
+        )
+        return
 
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -131,15 +152,8 @@ def main():
     run_clicked = st.button("🚀 Run Multi-Agent Analysis", type="primary", disabled=uploaded_pdf is None)
 
     if run_clicked:
-        if not settings["api_key"]:
-            st.error("Please enter your Gemini API key in the sidebar first.")
-            return
-        if not settings["model_candidates"]:
-            st.error("Please provide at least one Gemini model in the sidebar.")
-            return
-
         with st.spinner("Rendering schematic pages..."):
-            images = render_pdf_pages_to_images(uploaded_pdf.read(), zoom=settings["zoom"])
+            images = render_pdf_pages_to_images(uploaded_pdf.read(), zoom=RENDER_ZOOM)
 
         st.success(f"Rendered {len(images)} page(s).")
         with st.expander("📎 Preview submitted pages", expanded=False):
@@ -158,8 +172,8 @@ def main():
                              "the deep engineering analysis run in parallel..."):
                 results = run_review(
                     images=images,
-                    api_key=settings["api_key"],
-                    model_candidates=settings["model_candidates"],
+                    api_key=api_key,
+                    model_candidates=MODEL_CANDIDATES,
                     extra_notes=extra_notes,
                     status_callback=report_status,
                 )
@@ -178,8 +192,18 @@ def main():
             f"Vision extraction model: `{results['vision_model_used']}`  •  "
             f"Crew reasoning model: `{results['crew_model_used']}`"
         )
-        st.subheader("📊 Engineering Review Report")
 
+        # --- One clearly separated section per agent, shown directly on
+        # the page (not tucked away in a collapsed expander) -------------
+        st.header("🧩 Agent-by-Agent Results")
+        for result_key, title, icon in AGENT_SECTIONS:
+            with st.container(border=True):
+                st.subheader(f"{icon} {title}")
+                st.markdown(results[result_key])
+
+        # --- Final consolidated report (Reporting Agent's output) -------
+        st.markdown("---")
+        st.header("📝 Final Consolidated Report")
         sections = split_report_into_sections(results["final_report"])
         tab_titles = [t for t in REPORT_SECTIONS if t in sections] + \
                      [t for t in sections if t not in REPORT_SECTIONS]
@@ -194,16 +218,6 @@ def main():
             file_name="pcb_multi_agent_review.md",
             mime="text/markdown",
         )
-
-        with st.expander("🔍 See each agent's raw output", expanded=False):
-            st.markdown("**🔎 Component Locator**")
-            st.markdown(results["components"])
-            st.markdown("**💰 Design Costing**")
-            st.markdown(results["costing"])
-            st.markdown("**📦 Hardware Availability**")
-            st.markdown(results["availability"])
-            st.markdown("**🛠️ Engineering Analyst**")
-            st.markdown(results["engineering"])
 
 
 if __name__ == "__main__":
