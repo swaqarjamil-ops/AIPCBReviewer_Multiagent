@@ -113,3 +113,57 @@ configure.
   general knowledge, not live distributor pricing or stock data - treat
   those sections as a starting point, not a quote.
 - Larger/more complex schematics will use more tokens and take longer.
+
+
+## Live DigiKey / Mouser component sourcing
+
+The **Component Locator** and **Design Costing** agents can use live web
+search through CrewAI's `SerperDevTool`. Their task prompts restrict
+component research to:
+
+- `site:digikey.com`
+- `site:mouser.com`
+
+The agents are instructed to preserve verified distributor URLs and never
+invent a listing, stock status, or price.
+
+Add this to Streamlit Community Cloud → **Settings → Secrets**:
+
+```toml
+GEMINI_API_KEY = "your-gemini-key"
+SERPER_API_KEY = "your-serper-key"
+```
+
+If `SERPER_API_KEY` is not configured, the application still runs, but
+distributor verification is disabled and the costing agent produces clearly
+labelled estimates.
+
+## PKR design costing
+
+The Design Costing Agent reports component prices in **PKR**. When a
+distributor listing is in USD, the application supplies a USD→PKR rate to
+the agent. The rate is obtained at runtime from Frankfurter when available.
+
+You can optionally override the rate with:
+
+```toml
+USD_PKR_RATE = "280"
+```
+
+This is useful when your organization wants to use a controlled procurement
+exchange rate instead of the live rate.
+
+## Final report export
+
+After analysis, use:
+
+**📄 Generate Final Report (MS Word + PDF)**
+
+The app then provides:
+
+- **MS Word (.docx)** download
+- **PDF (.pdf)** download
+- Existing **Markdown (.md)** download
+
+The Word/PDF files are generated directly from the Reporting Agent's final
+consolidated report.
