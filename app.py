@@ -222,15 +222,29 @@ def render_results(results):
     st.markdown('<div class="section-label">Final engineering report</div>', unsafe_allow_html=True)
     sections = split_report_into_sections(results["final_report"])
     tab_titles = [t for t in REPORT_SECTIONS if t in sections] + [t for t in sections if t not in REPORT_SECTIONS]
-    tabs = st.tabs([f"{t}" for t in tab_titles])
-    for tab, title in zip(tabs, tab_titles):
-        with tab:
-            st.markdown('<div class="report-shell">', unsafe_allow_html=True)
-            st.markdown(sections[title])
-            st.markdown('</div>', unsafe_allow_html=True)
+
+    if not tab_titles:
+        # The Reporting Agent returned nothing, or returned text with no
+        # '##' headings (e.g. an empty/garbled response). st.tabs([])
+        # raises ValueError on an empty list, so fall back to showing
+        # whatever raw text we do have instead of crashing the page.
+        st.warning(
+            "The reporting agent didn't return a structured report this "
+            "run, so here's its raw output instead."
+        )
+        st.markdown('<div class="report-shell">', unsafe_allow_html=True)
+        st.markdown(results["final_report"].strip() or "_No report content was returned._")
+        st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        tabs = st.tabs([f"{t}" for t in tab_titles])
+        for tab, title in zip(tabs, tab_titles):
+            with tab:
+                st.markdown('<div class="report-shell">', unsafe_allow_html=True)
+                st.markdown(sections[title])
+                st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="section-label">Export</div>', unsafe_allow_html=True)
-    if st.button("▣  Generate Final Report — Word + PDF", type="primary", use_container_width=True):
+    if st.button("▣  Generate Final Report — Word + PDF", type="primary", width="stretch"):
         with st.spinner("Preparing formatted engineering reports..."):
             docx_bytes, pdf_bytes = generate_export_files(results["final_report"])
         st.session_state["report_docx"] = docx_bytes
@@ -240,11 +254,11 @@ def render_results(results):
     if "report_docx" in st.session_state:
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.download_button("⬇ MS Word", st.session_state["report_docx"], "CircuitMind_AI_PCB_Review.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
+            st.download_button("⬇ MS Word", st.session_state["report_docx"], "CircuitMind_AI_PCB_Review.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", width="stretch")
         with c2:
-            st.download_button("⬇ PDF", st.session_state["report_pdf"], "CircuitMind_AI_PCB_Review.pdf", "application/pdf", use_container_width=True)
+            st.download_button("⬇ PDF", st.session_state["report_pdf"], "CircuitMind_AI_PCB_Review.pdf", "application/pdf", width="stretch")
         with c3:
-            st.download_button("⬇ Markdown", results["final_report"], "CircuitMind_AI_PCB_Review.md", "text/markdown", use_container_width=True)
+            st.download_button("⬇ Markdown", results["final_report"], "CircuitMind_AI_PCB_Review.md", "text/markdown", width="stretch")
 
 
 def main():
@@ -288,7 +302,7 @@ def main():
         st.markdown('<div class="step"><span class="step-num">2</span> Run multi-agent engineering review</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="primary-action">', unsafe_allow_html=True)
-    run_clicked = st.button("⚡ Analyze My PCB Schematic", type="primary", disabled=uploaded_pdf is None, use_container_width=True)
+    run_clicked = st.button("⚡ Analyze My PCB Schematic", type="primary", disabled=uploaded_pdf is None, width="stretch")
     st.markdown('</div>', unsafe_allow_html=True)
 
     if not web_search_enabled:
@@ -298,10 +312,12 @@ def main():
         with st.spinner("Rendering schematic pages..."):
             images = render_pdf_pages_to_images(uploaded_pdf.read(), zoom=RENDER_ZOOM)
 
-        with st.expander(f"Schematic preview · {len(images)} page(s)", expanded=False):
-            preview_cols = st.columns(min(len(images), 4) or 1)
-            for i, img in enumerate(images):
-                preview_cols[i % len(preview_cols)].image(img, caption=f"Page {i + 1}", width="stretch")
+        # Stash in session_state (not just a local variable) so the
+        # preview survives the script reruns Streamlit triggers on every
+        # later widget interaction - including clicking a download
+        # button - the same way "results" below already does. Without
+        # this, the preview/page-count simply vanished on the next rerun.
+        st.session_state["preview_images"] = images
 
         status_box = st.empty()
 
@@ -329,6 +345,17 @@ def main():
         st.session_state.pop("report_docx", None)
         st.session_state.pop("report_pdf", None)
         st.rerun()
+
+    # Rendered independently of run_clicked (and before the results
+    # section) so the schematic preview survives later reruns - e.g.
+    # clicking any of the export download buttons - instead of vanishing
+    # the moment run_clicked is no longer True.
+    if "preview_images" in st.session_state:
+        imgs = st.session_state["preview_images"]
+        with st.expander(f"Schematic preview · {len(imgs)} page(s)", expanded=False):
+            preview_cols = st.columns(min(len(imgs), 4) or 1)
+            for i, img in enumerate(imgs):
+                preview_cols[i % len(preview_cols)].image(img, caption=f"Page {i + 1}", width="stretch")
 
     if "results" in st.session_state:
         render_results(st.session_state["results"])
