@@ -1,46 +1,45 @@
 """
 crew.py
 -------
-Assembles and runs the CrewAI PCB review crew.
-"""
+Assembles the CrewAI Crew (agents + tasks) for one Gemini model, and
+provides the top-level `run_review()` function that app.py calls. All
+the "try this Gemini model, fall back to the next one if it's busy" logic
+lives in llm_utils.with_model_fallback and is reused for both the vision
+extraction step and the crew run itself.
 
-import os
+Per tasks.py, the crew now runs in three stages instead of five fully
+sequential steps - Component Locator, then Costing/Availability/
+Engineering IN PARALLEL, then Reporting - which is the main speedup over
+the previous fully-sequential version.
+"""
 
 from crewai import Crew, Process
 from PIL import Image
 
 from agents import build_agents
 from llm_utils import extract_schematic_description, get_gemini_llm, with_model_fallback
-from market_data import get_usd_pkr_rate
 from tasks import build_tasks
 
 
-def build_crew(
-    model_name: str,
-    api_key: str,
-    schematic_description: str,
-    extra_notes: str,
-    usd_pkr_rate: float,
-    fx_source: str,
-    web_search_enabled: bool = True,
-) -> Crew:
-    """Build a fresh Crew for one Gemini model."""
+def build_crew(model_name: str, api_key: str, schematic_description: str, extra_notes: str) -> Crew:
+    """Build a fresh Crew (new agents + tasks) for a given Gemini model.
+
+    A new Crew is built per attempt (rather than mutating an existing
+    one) so that falling back to a different model is simple and safe.
+
+    Args:
+        model_name: Gemini model to power every agent in this crew.
+        api_key: Google AI Studio / Gemini API key.
+        schematic_description: Text extracted from the schematic images.
+        extra_notes: Optional free-text context from the user.
+
+    Returns:
+        A ready-to-run crewai.Crew using a sequential process.
+    """
     llm = get_gemini_llm(model_name, api_key)
-    agents = build_agents(llm, web_search_enabled=web_search_enabled)
-    tasks = build_tasks(
-        agents,
-        schematic_description,
-        extra_notes,
-        usd_pkr_rate=usd_pkr_rate,
-        fx_source=fx_source,
-        web_search_enabled=web_search_enabled,
-    )
-    return Crew(
-        agents=list(agents.values()),
-        tasks=tasks,
-        process=Process.sequential,
-        verbose=False,
-    )
+    agents = build_agents(llm)
+    tasks = build_tasks(agents, schematic_description, extra_notes)
+    return Crew(agents=list(agents.values()), tasks=tasks, process=Process.sequential, verbose=False)
 
 
 def run_review(
@@ -49,35 +48,48 @@ def run_review(
     model_candidates: list[str],
     extra_notes: str,
     status_callback=None,
-    web_search_enabled: bool = True,
 ) -> dict[str, str]:
-    """Run vision extraction followed by the five-agent review crew."""
-    usd_pkr_rate, fx_source = get_usd_pkr_rate()
+    """Run the full two-stage review: vision extraction, then the crew.
 
-    if status_callback:
-        status_callback(
-            f"💱 Costing conversion: 1 USD ≈ PKR {usd_pkr_rate:,.2f} "
-            f"({fx_source})."
-        )
+    Args:
+        images: Rendered schematic page images.
+        api_key: Google AI Studio / Gemini API key.
+        model_candidates: Ordered list of Gemini models to try/fall back
+            across, e.g. ["gemini-3-pro", "gemini-3.5-flash", ...].
+        extra_notes: Optional free-text context from the user.
+        status_callback: Optional function(str) for live progress updates
+            in the Streamlit UI.
 
+    Returns:
+        A dict with each agent's raw output plus the final report:
+        {
+            "components": "...",
+            "costing": "...",
+            "availability": "...",
+            "engineering": "...",
+            "final_report": "...",
+            "model_used": "gemini-3-pro",
+        }
+    """
+    # Stage 1: look at the images once, write a detailed text description.
     description, vision_model_used = with_model_fallback(
         model_candidates,
         lambda model_name: extract_schematic_description(images, api_key, model_name),
         status_callback=status_callback,
     )
 
+    # Stage 2: run the 5-agent crew over that text description.
     def _run_crew(model_name: str):
-        crew = build_crew(
-            model_name,
-            api_key,
-            description,
-            extra_notes,
-            usd_pkr_rate=usd_pkr_rate,
-            fx_source=fx_source,
-            web_search_enabled=web_search_enabled,
-        )
+        crew = build_crew(model_name, api_key, description, extra_notes)
         result = crew.kickoff()
-        task_outputs = [str(t.output.raw) for t in crew.tasks]
+        # Pull each task's individual output so the UI can show them
+        # separately, in addition to the final consolidated report.
+        task_outputs = []
+        for t in crew.tasks:
+            if t.output and hasattr(t.output, "raw"):
+                task_outputs.append(str(t.output.raw))
+            else:
+                task_outputs.append("⚠️ Output unavailable for this step.")
         final_report = str(result.raw) if hasattr(result, "raw") else str(result)
         return task_outputs, final_report
 
@@ -93,7 +105,4 @@ def run_review(
         "final_report": final_report,
         "vision_model_used": vision_model_used,
         "crew_model_used": crew_model_used,
-        "usd_pkr_rate": f"{usd_pkr_rate:.4f}",
-        "fx_source": fx_source,
-        "web_search_enabled": str(web_search_enabled),
     }
