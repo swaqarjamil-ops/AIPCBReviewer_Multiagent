@@ -1,57 +1,73 @@
 """
 agents.py
 ---------
-Defines the five CrewAI agents that make up the review crew. Each agent
-has a narrow, well-defined role so its output stays focused. All five
-share the same underlying Gemini LLM (passed in from llm_utils.py), so
-swapping/falling back to a different Gemini model only requires building
-a new LLM object, not touching this file.
+Defines the five CrewAI agents used by the PCB reviewer.
+
+The Component Locator and Design Costing agents use Serper web search
+when SERPER_API_KEY is configured. Their prompts explicitly restrict
+component sourcing searches to DigiKey and Mouser.
 """
 
 from crewai import Agent, LLM
 
+try:
+    from crewai_tools import SerperDevTool
+except ImportError:  # pragma: no cover - handled gracefully in app
+    SerperDevTool = None
 
-def build_agents(llm: LLM) -> dict[str, Agent]:
-    """Create the five review agents, all backed by the given LLM.
 
-    Args:
-        llm: A crewai.LLM instance (see llm_utils.get_gemini_llm).
+def _distributor_search_tool():
+    """Create the web-search tool used for DigiKey/Mouser component lookup."""
+    if SerperDevTool is None:
+        return None
+    return SerperDevTool(n_results=8)
 
-    Returns:
-        A dict mapping a short key to the corresponding Agent, so
-        tasks.py can reference them by name.
-    """
+
+def build_agents(llm: LLM, web_search_enabled: bool = True) -> dict[str, Agent]:
+    """Create the five review agents, all backed by the supplied LLM."""
+    distributor_search = _distributor_search_tool() if web_search_enabled else None
+    sourcing_tools = [distributor_search] if distributor_search else []
 
     component_locator = Agent(
-        role="Component Locator",
+        role="Component Locator & Distributor Research Agent",
         goal=(
-            "Produce a clean, organized inventory of every component on "
-            "the schematic with its designator, type, value, and function."
+            "Produce a clean inventory of every component and, where a "
+            "manufacturer part number can be identified, research the "
+            "component on DigiKey and Mouser. Record manufacturer, MPN, "
+            "package, and distributor source URLs without inventing data."
         ),
         backstory=(
-            "You are a meticulous PCB librarian. You read raw schematic "
-            "extraction notes and turn them into an unambiguous, well "
-            "organized Bill-of-Materials-style component list that other "
-            "engineers can rely on without re-checking the schematic."
+            "You are a meticulous PCB BOM and component sourcing specialist. "
+            "You read schematic extraction notes, identify likely manufacturer "
+            "part numbers, and use web search to verify listings. For online "
+            "component research, search ONLY DigiKey (digikey.com) and Mouser "
+            "(mouser.com). If an exact part cannot be verified, say "
+            "'Not verified' rather than guessing."
         ),
+        tools=sourcing_tools,
         llm=llm,
         verbose=False,
         allow_delegation=False,
     )
 
     design_costing = Agent(
-        role="Design Costing Analyst",
+        role="Design Costing & Procurement Analyst",
         goal=(
-            "Estimate the approximate per-component and total BOM cost "
-            "for the design at low-to-moderate production volume."
+            "Produce a realistic BOM cost estimate using current distributor "
+            "listing information where available, with every component price "
+            "shown in PKR. Use DigiKey and Mouser listings as the preferred "
+            "price sources and clearly distinguish live/listing prices from "
+            "engineering estimates."
         ),
         backstory=(
-            "You are a hardware procurement analyst with broad knowledge "
-            "of typical electronic component pricing. You give realistic, "
-            "clearly-labeled ESTIMATES (not live quotes), flag the most "
-            "expensive components, and suggest lower-cost alternatives "
-            "where it is safe to do so."
+            "You are a hardware procurement analyst. You use web search to "
+            "look up exact or closest verified part listings on DigiKey and "
+            "Mouser, capture the available unit price/quantity break when "
+            "visible, then convert USD prices to PKR using the exchange rate "
+            "provided in the task. Never fabricate a distributor price. "
+            "When no live price is found, label the PKR value as an estimate."
         ),
+        tools=sourcing_tools,
         llm=llm,
         verbose=False,
         allow_delegation=False,
@@ -60,7 +76,7 @@ def build_agents(llm: LLM) -> dict[str, Agent]:
     hardware_availability = Agent(
         role="Hardware Availability Analyst",
         goal=(
-            "Assess how easy or hard each key component will be to source, "
+            "Assess how easy or hard each key component will be to source "
             "and flag supply-chain risk."
         ),
         backstory=(
