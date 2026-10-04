@@ -33,7 +33,7 @@ AGENT_SECTIONS = [
 def configure_page():
     """Configure the CircuitMind-style page and global CSS."""
     st.set_page_config(
-        page_title="CircuitMind AI | PCB Engineering Reviewer",
+        page_title="CircuitMind Enterprise AI | PCB Engineering Reviewer",
         page_icon="🟩",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -52,7 +52,7 @@ def configure_page():
             --green: #65d46e;
             --green-2: #2fbf71;
             --text: #eef8f0;
-            --muted: #8da396;
+            --muted: #D3D3D3;
             --warning: #e8c56a;
         }
 
