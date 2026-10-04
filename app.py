@@ -171,9 +171,9 @@ def render_feature_cards():
     st.markdown(
         """
         <div class="feature-grid">
-          <div class="feature-card"><div class="feature-icon">⌁</div><div class="feature-title">Signal Integrity</div><div class="feature-desc">Identify high-speed routing, termination, impedance and coupling risks.</div></div>
-          <div class="feature-card"><div class="feature-icon">₨</div><div class="feature-title">Power & Ground</div><div class="feature-desc">Review rails, decoupling, return paths, loops and power distribution risks.</div></div>
-          <div class="feature-card"><div class="feature-icon">◌</div><div class="feature-title">EMI & Coupling</div><div class="feature-desc">Detect common-mode coupling, noise paths and potential EMI concerns.</div></div>
+          <div class="feature-card"><div class="feature-icon">⚡</div><div class="feature-title">Signal Integrity</div><div class="feature-desc">Identify high-speed routing, termination, impedance and coupling risks.</div></div>
+          <div class="feature-card"><div class="feature-icon">🔋</div><div class="feature-title">Power & Ground</div><div class="feature-desc">Review rails, decoupling, return paths, loops and power distribution risks.</div></div>
+          <div class="feature-card"><div class="feature-icon">📡</div><div class="feature-title">EMI & Coupling</div><div class="feature-desc">Detect common-mode coupling, noise paths and potential EMI concerns.</div></div>
         </div>
         """,
         unsafe_allow_html=True,
