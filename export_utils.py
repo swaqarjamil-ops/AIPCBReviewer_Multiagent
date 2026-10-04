@@ -8,11 +8,12 @@ serve them directly without creating temporary files.
 
 import io
 import re
+from datetime import datetime
 from xml.sax.saxutils import escape
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
+from docx.shared import Pt, RGBColor
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -24,6 +25,11 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+
+
+def _generated_on() -> str:
+    """Return today's date formatted for the report header, e.g. 'October 04, 2026'."""
+    return datetime.now().strftime("%B %d, %Y")
 
 
 def _plain(text: str) -> str:
@@ -92,7 +98,7 @@ def _parse_markdown(report: str):
         yield ("paragraph", _plain(" ".join(paragraph)))
 
 
-def report_to_docx(report: str, title: str = "AI PCB Engineering Review") -> bytes:
+def report_to_docx(report: str, title: str = "CircuitMind Enterprise AI Engineering Report") -> bytes:
     """Convert markdown report to a DOCX document and return its bytes."""
     doc = Document()
     normal = doc.styles["Normal"]
@@ -104,6 +110,13 @@ def report_to_docx(report: str, title: str = "AI PCB Engineering Review") -> byt
     run = p.add_run(title)
     run.bold = True
     run.font.size = Pt(18)
+
+    date_p = doc.add_paragraph()
+    date_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    date_run = date_p.add_run(f"Generated on {_generated_on()}")
+    date_run.italic = True
+    date_run.font.size = Pt(10)
+    date_run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
 
     for block in _parse_markdown(report):
         kind = block[0]
@@ -132,7 +145,7 @@ def report_to_docx(report: str, title: str = "AI PCB Engineering Review") -> byt
     return output.getvalue()
 
 
-def report_to_pdf(report: str, title: str = "AI PCB Engineering Review") -> bytes:
+def report_to_pdf(report: str, title: str = "CircuitMind Enterprise AI  Engineering Report") -> bytes:
     """Convert markdown report to an A4 PDF and return its bytes."""
     output = io.BytesIO()
     styles = getSampleStyleSheet()
@@ -140,8 +153,13 @@ def report_to_pdf(report: str, title: str = "AI PCB Engineering Review") -> byte
     styles.add(ParagraphStyle(name="ReportH1", parent=styles["Heading1"], fontSize=15, leading=18, spaceAfter=7))
     styles.add(ParagraphStyle(name="ReportH2", parent=styles["Heading2"], fontSize=12, leading=15, spaceBefore=8, spaceAfter=5))
     styles.add(ParagraphStyle(name="ReportBullet", parent=styles["BodyText"], fontSize=8.5, leading=11, leftIndent=12, bulletIndent=3))
+    styles.add(ParagraphStyle(name="ReportDate", parent=styles["BodyText"], fontSize=9.5, leading=12, alignment=1, textColor=colors.grey, spaceAfter=6))
 
-    story = [Paragraph(escape(title), styles["Title"]), Spacer(1, 8)]
+    story = [
+        Paragraph(escape(title), styles["Title"]),
+        Paragraph(f"Generated on {escape(_generated_on())}", styles["ReportDate"]),
+        Spacer(1, 8),
+    ]
 
     for block in _parse_markdown(report):
         kind = block[0]
