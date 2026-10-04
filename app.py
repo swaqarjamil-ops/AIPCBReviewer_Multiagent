@@ -170,11 +170,6 @@ def render_feature_cards():
     """Render the three primary CircuitMind analysis capabilities."""
     st.markdown(
         """
-<div class="feature-row">
-            <div class="feature"><div class="icon">⚡</div><b>Signal Integrity</b><span>Termination, reflections, interfaces and high-speed risk areas.</span></div>
-            <div class="feature"><div class="icon">🔋</div><b>Power & Ground</b><span>Decoupling, return paths, loops and power integrity concerns.</span></div>
-            <div class="feature"><div class="icon">📡</div><b>EMI & Coupling</b><span>Common-mode paths, filtering, shields and coupling risks.</span></div>
-        </div>
         <div class="feature-grid">
           <div class="feature-card"><div class="feature-icon">⚡</div><div class="feature-title">Signal Integrity</div><div class="feature-desc">Identify high-speed routing, termination, impedance and coupling risks.</div></div>
           <div class="feature-card"><div class="feature-icon">🔋</div><div class="feature-title">Power & Ground</div><div class="feature-desc">Review rails, decoupling, return paths, loops and power distribution risks.</div></div>
