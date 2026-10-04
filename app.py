@@ -2,7 +2,7 @@
 app.py
 ------
 CircuitMind AI - AI PCB Multi-Agent Reviewer
-Modern Streamlit UI Layout.
+Modern Streamlit UI inspired by the CircuitMind v2 layout.
 """
 
 import os
@@ -33,7 +33,7 @@ AGENT_SECTIONS = [
 def configure_page():
     """Configure the CircuitMind-style page and global CSS."""
     st.set_page_config(
-        page_title="CircuitMind Enterprise AI | PCB Engineering Reviewer",
+        page_title="CircuitMind AI | PCB Engineering Reviewer",
         page_icon="🟩",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -52,7 +52,7 @@ def configure_page():
             --green: #65d46e;
             --green-2: #2fbf71;
             --text: #eef8f0;
-            --muted: #D3D3D3;
+            --muted: #8da396;
             --warning: #e8c56a;
         }
 
@@ -87,7 +87,7 @@ def configure_page():
             mask-image: linear-gradient(90deg, transparent, black 50%, transparent);
         }
         .hero-kicker { color: var(--green); font: 600 .78rem 'JetBrains Mono', monospace; text-transform: uppercase; letter-spacing: .14em; }
-        .hero h1 { margin: .35rem 0 .5rem; font-size: clamp(2rem, 4vw, 3.35rem); line-height: 1.02; letter-spacing: -.045em; }
+        .hero h1 { margin: .35rem 0 .5rem; font-size: clamp(2rem, 4vw, 3.35rem); line-height: 1.02; letter-spacing: -.045em; color: var(--green); }
         .hero p { max-width: 790px; color: #a9bbb0; font-size: 1.02rem; line-height: 1.65; margin: 0; }
         .trace { margin-top: 1.1rem; color: #52725b; font: .72rem 'JetBrains Mono', monospace; }
         .feature-grid { display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 1.2rem 0 1.5rem; }
@@ -171,9 +171,9 @@ def render_feature_cards():
     st.markdown(
         """
         <div class="feature-grid">
-          <div class="feature-card"><div class="feature-icon">⚡</div><div class="feature-title">Signal Integrity</div><div class="feature-desc">Identify high-speed routing, termination, impedance and coupling risks.</div></div>
-          <div class="feature-card"><div class="feature-icon">🔋</div><div class="feature-title">Power & Ground</div><div class="feature-desc">Review rails, decoupling, return paths, loops and power distribution risks.</div></div>
-          <div class="feature-card"><div class="feature-icon">📡</div><div class="feature-title">EMI & Coupling</div><div class="feature-desc">Detect common-mode coupling, noise paths and potential EMI concerns.</div></div>
+          <div class="feature-card"><div class="feature-icon">⌁</div><div class="feature-title">Signal Integrity</div><div class="feature-desc">Identify high-speed routing, termination, impedance and coupling risks.</div></div>
+          <div class="feature-card"><div class="feature-icon">₨</div><div class="feature-title">Power & Ground</div><div class="feature-desc">Review rails, decoupling, return paths, loops and power distribution risks.</div></div>
+          <div class="feature-card"><div class="feature-icon">◌</div><div class="feature-title">EMI & Coupling</div><div class="feature-desc">Detect common-mode coupling, noise paths and potential EMI concerns.</div></div>
         </div>
         """,
         unsafe_allow_html=True,
