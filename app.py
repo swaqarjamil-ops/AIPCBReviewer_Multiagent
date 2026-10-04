@@ -2,7 +2,7 @@
 app.py
 ------
 CircuitMind AI - AI PCB Multi-Agent Reviewer
-Modern Streamlit UI inspired by the CircuitMind v2 layout.
+Modern Streamlit UI Layout.
 """
 
 import os
