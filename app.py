@@ -20,9 +20,15 @@ MODEL_CANDIDATES = [
     "gemini-3.6-flash",
     "gemini-3.5-flash",
 ]
-RENDER_ZOOM = 2.0
+# Default (balanced) vision settings. Token-saving mode uses lower values.
+RENDER_ZOOM = 1.4
+RENDER_MAX_SIDE = 1400
+# Token-saving mode: cheaper vision + no web search.
+TOKEN_SAVE_ZOOM = 1.0
+TOKEN_SAVE_MAX_SIDE = 1024
 
 AGENT_SECTIONS = [
+
     ("components", "Component Locator", "⌕"),
     ("costing", "Design Costing", "₨"),
     ("availability", "Hardware Availability", "▣"),
@@ -142,7 +148,7 @@ def configure_web_search() -> bool:
     return bool(key)
 
 
-def render_sidebar(web_search_enabled: bool):
+def render_sidebar(web_search_enabled: bool, token_save: bool = False, max_pages: int = 0):
     """Render CircuitMind-style settings and workflow status in the sidebar."""
     with st.sidebar:
         st.markdown('<div class="circuit-logo">▣ CircuitMind Enterprise AI</div>', unsafe_allow_html=True)
@@ -150,20 +156,30 @@ def render_sidebar(web_search_enabled: bool):
         st.markdown("---")
         st.markdown("**Analysis Engine**")
         st.markdown('<div class="status"><span class="status-dot"></span> Gemini multimodal</div>', unsafe_allow_html=True)
+        if token_save:
+            st.markdown(
+                '<div class="status"><span class="status-dot"></span> Token-saving mode ON</div>',
+                unsafe_allow_html=True,
+            )
+            st.caption("Lower image res · no live distributor search")
+        if max_pages and max_pages > 0:
+            st.caption(f"Page limit: first {max_pages} page(s)")
         st.markdown("\n**Engineering scope**")
         for item in ["Signal Integrity", "Power & Ground", "EMI & Coupling", "Component Sourcing", "Design Costing"]:
             st.markdown(f"• {item}")
         st.markdown("---")
         st.markdown("**Data sources**")
+        effective_search = web_search_enabled and not token_save
         st.markdown(
-            '<div class="status"><span class="status-dot"></span> DigiKey + Mouser</div>' if web_search_enabled
-            else '<div class="status">○ Distributor search not configured</div>',
+            '<div class="status"><span class="status-dot"></span> DigiKey + Mouser</div>' if effective_search
+            else '<div class="status">○ Distributor search off</div>',
             unsafe_allow_html=True,
         )
         fx = get_secret("USD_PKR_RATE") or "Live rate"
         st.caption(f"USD → PKR: {fx}")
         st.markdown("---")
         st.caption("CircuitMind Enterprise AI • Multi-Agent Review")
+
 
 
 def render_feature_cards():
@@ -264,12 +280,17 @@ def render_results(results):
 def main():
     """Run the CircuitMind Enterprise AI Streamlit application."""
     configure_page()
-    web_search_enabled = configure_web_search()
+    web_search_configured = configure_web_search()
     configured_fx = get_secret("USD_PKR_RATE")
     if configured_fx:
         os.environ["USD_PKR_RATE"] = configured_fx
 
-    render_sidebar(web_search_enabled)
+    # Token controls live in the main panel; sidebar reflects their state.
+    # Defaults are read from session_state so sidebar can show them early.
+    token_save = st.session_state.get("token_save_mode", False)
+    max_pages = st.session_state.get("max_pages_limit", 0)
+
+    render_sidebar(web_search_configured, token_save=token_save, max_pages=max_pages)
     render_hero()
     render_feature_cards()
 
@@ -294,7 +315,48 @@ def main():
             height=132,
         )
 
-    st.markdown('<div class="section-label">02 · Analyze PCB</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">02 · Token & page controls</div>', unsafe_allow_html=True)
+    tc1, tc2 = st.columns([1.2, 1], gap="large")
+    with tc1:
+        token_save = st.checkbox(
+            "Token-saving mode",
+            help=(
+                "Uses lower image resolution, caps page size, and disables "
+                "live DigiKey/Mouser search. Best for quick / cheap runs."
+            ),
+            key="token_save_mode",
+        )
+
+        if token_save:
+            st.caption(
+                f"Vision: zoom {TOKEN_SAVE_ZOOM}, max side {TOKEN_SAVE_MAX_SIDE}px · "
+                "Distributor search forced OFF"
+            )
+        else:
+            st.caption(
+                f"Vision: zoom {RENDER_ZOOM}, max side {RENDER_MAX_SIDE}px · "
+                f"Distributor search {'ON' if web_search_configured else 'OFF (no SERPER key)'}"
+            )
+    with tc2:
+        max_pages = st.number_input(
+            "Max pages to analyze",
+            min_value=0,
+            max_value=50,
+            value=0,
+            step=1,
+            help="0 = all pages. Use 2–4 for large multi-page PDFs to cut vision tokens.",
+            key="max_pages_limit",
+        )
+
+        if max_pages and max_pages > 0:
+            st.caption(f"Only the first {int(max_pages)} page(s) will be sent to vision.")
+        else:
+            st.caption("All pages will be rendered and sent to vision.")
+
+    # Effective web search: requires SERPER key AND token-saving mode off.
+    web_search_enabled = web_search_configured and not token_save
+
+    st.markdown('<div class="section-label">03 · Analyze PCB</div>', unsafe_allow_html=True)
     c1, c2 = st.columns([1, 2])
     with c1:
         st.markdown('<div class="step"><span class="step-num">1</span> Upload schematic</div>', unsafe_allow_html=True)
@@ -305,12 +367,22 @@ def main():
     run_clicked = st.button("⚡ Analyze My PCB Schematic", type="primary", disabled=uploaded_pdf is None, width="stretch")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    if not web_search_enabled:
+    if not web_search_configured:
         st.info("Distributor sourcing is offline: add `SERPER_API_KEY` to enable DigiKey/Mouser lookup and live pricing.")
+    elif token_save:
+        st.info("Token-saving mode is on: live DigiKey/Mouser search is disabled for this run.")
 
     if run_clicked:
+        zoom = TOKEN_SAVE_ZOOM if token_save else RENDER_ZOOM
+        max_side = TOKEN_SAVE_MAX_SIDE if token_save else RENDER_MAX_SIDE
         with st.spinner("Rendering schematic pages..."):
-            images = render_pdf_pages_to_images(uploaded_pdf.read(), zoom=RENDER_ZOOM)
+            images = render_pdf_pages_to_images(
+                uploaded_pdf.read(),
+                zoom=zoom,
+                max_side=max_side,
+            )
+            if max_pages and int(max_pages) > 0:
+                images = images[: int(max_pages)]
 
         # Stash in session_state (not just a local variable) so the
         # preview survives the script reruns Streamlit triggers on every
@@ -345,6 +417,7 @@ def main():
         st.session_state.pop("report_docx", None)
         st.session_state.pop("report_pdf", None)
         st.rerun()
+
 
     # Rendered independently of run_clicked (and before the results
     # section) so the schematic preview survives later reruns - e.g.

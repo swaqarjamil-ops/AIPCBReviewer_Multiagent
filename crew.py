@@ -66,8 +66,20 @@ def run_review(
         status_callback=status_callback,
     )
 
+    # Soft length guard: very long extractions inflate every downstream
+    # agent prompt. Keep a hard cap so token usage stays predictable.
+    _MAX_DESC_CHARS = 12000
+    if len(description) > _MAX_DESC_CHARS:
+        if status_callback:
+            status_callback(
+                f"✂️ Schematic extraction was {len(description):,} chars; "
+                f"truncating to {_MAX_DESC_CHARS:,} for token efficiency."
+            )
+        description = description[:_MAX_DESC_CHARS] + "\n... [truncated for token efficiency]"
+
     # Human-readable labels, in the same order tasks.build_tasks() returns
     # them, used only to produce a clear error message below.
+
     _TASK_LABELS = [
         "Component Locator", "Design Costing", "Hardware Availability",
         "Engineering Analyst", "Reporting Agent",

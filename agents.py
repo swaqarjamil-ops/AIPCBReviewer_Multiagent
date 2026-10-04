@@ -20,7 +20,9 @@ def _distributor_search_tool():
     """Create the web-search tool used for DigiKey/Mouser component lookup."""
     if SerperDevTool is None:
         return None
-    return SerperDevTool(n_results=8)
+    # Fewer results = fewer tokens fed back into the agent after each search.
+    return SerperDevTool(n_results=4)
+
 
 
 def build_agents(llm: LLM, web_search_enabled: bool = True) -> dict[str, Agent]:

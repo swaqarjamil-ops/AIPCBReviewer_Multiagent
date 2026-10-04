@@ -102,23 +102,26 @@ def extract_schematic_description(images: list[Image.Image], api_key: str, model
     """
     client = genai.Client(api_key=api_key)
 
+    # Token-optimized prompt: structured bullets/tables only, no prose.
     prompt = (
         "You are looking at page images of an electronic schematic (possibly "
-        "multiple pages of the same design). Write a thorough, structured, "
-        "plain-text extraction covering:\n"
-        "1. Every component you can identify: reference designator, type "
-        "(resistor, capacitor, IC, connector, etc.), value, and package if "
-        "visible.\n"
-        "2. Key nets and how components connect (power rails, ground, "
-        "high-speed/clock/differential signals, analog vs digital sections).\n"
-        "3. Any connectors, test points, or off-board interfaces.\n"
-        "4. The overall topology/architecture you can infer (e.g. "
-        "'microcontroller with SPI flash, USB interface, and a buck "
-        "regulator feeding a 3.3V rail').\n"
-        "Be exhaustive and specific - this text will be the ONLY thing other "
-        "engineers use to analyze the design, so do not skip details. If "
-        "something is unreadable, say so rather than guessing."
+        "multiple pages of the same design). Extract a CONCISE structured "
+        "plain-text inventory. Prefer tables and short bullets. Do NOT write "
+        "long paragraphs.\n\n"
+        "Cover exactly these sections:\n"
+        "1. COMPONENTS — one line or table row per part: Designator | Type | "
+        "Value | Package (if visible). Group identical passives only when "
+        "designators can still be listed.\n"
+        "2. KEY NETS — power rails, ground, high-speed/clock/differential "
+        "signals, analog vs digital sections; list how major parts connect.\n"
+        "3. CONNECTORS / INTERFACES — connectors, test points, off-board I/O.\n"
+        "4. TOPOLOGY — one short sentence on overall architecture "
+        "(e.g. 'MCU + SPI flash + USB + 3.3V buck').\n\n"
+        "Be specific about designators and values. If something is unreadable, "
+        "say so rather than guessing. Keep the whole extraction as short as "
+        "accuracy allows."
     )
+
 
     # The google-genai SDK accepts a list mixing PIL images and text
     # directly in `contents` - PIL.Image objects are auto-converted.

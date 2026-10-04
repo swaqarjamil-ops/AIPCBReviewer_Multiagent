@@ -122,9 +122,14 @@ def build_tasks(
             "isolation barrier crossings, and proximity of noisy switching "
             "nets to sensitive analog or shield references.\n\n"
             "Reference specific designators/nets wherever possible. If "
-            "something can't be confirmed from the notes, say so rather "
-            "than guessing.\n"
-            f"{notes_block}\nSCHEMATIC EXTRACTION NOTES:\n{schematic_description}"
+            "something can't be confirmed from the notes or component "
+            "inventory context, say so rather than guessing.\n"
+            f"{notes_block}\n"
+            # Truncated extraction only (not the full text) to save tokens
+            # while still giving topology/net context for SI/power review.
+            "SCHEMATIC EXTRACTION NOTES (truncated for token efficiency):\n"
+            f"{schematic_description[:4500]}"
+            + ("\n... [truncated]" if len(schematic_description) > 4500 else "")
         ),
         expected_output=(
             "A markdown report with Signal Integrity, Power and Ground "
@@ -135,6 +140,8 @@ def build_tasks(
         context=[task_components],
         async_execution=True,
     )
+
+
 
     task_reporting = Task(
         description=(
