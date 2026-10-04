@@ -1,7 +1,7 @@
 """
 app.py
 ------
-CircuitMind AI - AI PCB Multi-Agent Reviewer
+CircuitMind Enterprise AI - AI PCB Multi-Agent Reviewer
 Modern Streamlit UI inspired by the CircuitMind v2 layout.
 """
 
@@ -33,7 +33,7 @@ AGENT_SECTIONS = [
 def configure_page():
     """Configure the CircuitMind-style page and global CSS."""
     st.set_page_config(
-        page_title="CircuitMind AI | PCB Engineering Reviewer",
+        page_title="CircuitMind Enterprise AI | PCB Engineering Reviewer",
         page_icon="🟩",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -145,7 +145,7 @@ def configure_web_search() -> bool:
 def render_sidebar(web_search_enabled: bool):
     """Render CircuitMind-style settings and workflow status in the sidebar."""
     with st.sidebar:
-        st.markdown('<div class="circuit-logo">▣ CIRCUITMIND AI</div>', unsafe_allow_html=True)
+        st.markdown('<div class="circuit-logo">▣ CircuitMind Enterprise AI</div>', unsafe_allow_html=True)
         st.caption("PCB Engineering Reviewer")
         st.markdown("---")
         st.markdown("**Analysis Engine**")
@@ -163,7 +163,7 @@ def render_sidebar(web_search_enabled: bool):
         fx = get_secret("USD_PKR_RATE") or "Live rate"
         st.caption(f"USD → PKR: {fx}")
         st.markdown("---")
-        st.caption("CircuitMind AI • Multi-Agent PCB Review")
+        st.caption("CircuitMind Enterprise AI • Multi-Agent Review")
 
 
 def render_feature_cards():
@@ -254,15 +254,15 @@ def render_results(results):
     if "report_docx" in st.session_state:
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.download_button("⬇ MS Word", st.session_state["report_docx"], "CircuitMind_AI_PCB_Review.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", width="stretch")
+            st.download_button("⬇ MS Word", st.session_state["report_docx"], "CircuitMind_Enterprise_report.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", width="stretch")
         with c2:
-            st.download_button("⬇ PDF", st.session_state["report_pdf"], "CircuitMind_AI_PCB_Review.pdf", "application/pdf", width="stretch")
+            st.download_button("⬇ PDF", st.session_state["report_pdf"], "CircuitMind_Enterprise_report.pdf", "application/pdf", width="stretch")
         with c3:
-            st.download_button("⬇ Markdown", results["final_report"], "CircuitMind_AI_PCB_Review.md", "text/markdown", width="stretch")
+            st.download_button("⬇ Markdown", results["final_report"], "CircuitMind_Enterprise_report.md", "text/markdown", width="stretch")
 
 
 def main():
-    """Run the CircuitMind AI Streamlit application."""
+    """Run the CircuitMind Enterprise AI Streamlit application."""
     configure_page()
     web_search_enabled = configure_web_search()
     configured_fx = get_secret("USD_PKR_RATE")
