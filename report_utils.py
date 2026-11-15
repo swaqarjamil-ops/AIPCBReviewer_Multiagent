@@ -17,6 +17,7 @@ REPORT_SECTIONS = [
     "Design Costing Estimate",
     "Hardware Availability Assessment",
     "Prioritized Recommendations",
+    "References",
 ]
 
 

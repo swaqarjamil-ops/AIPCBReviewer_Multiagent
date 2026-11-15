@@ -122,26 +122,31 @@ def build_tasks(
             "isolation barrier crossings, and proximity of noisy switching "
             "nets to sensitive analog or shield references.\n\n"
             "Reference specific designators/nets wherever possible. If "
-            "something can't be confirmed from the notes or component "
-            "inventory context, say so rather than guessing.\n"
-            f"{notes_block}\n"
-            # Truncated extraction only (not the full text) to save tokens
-            # while still giving topology/net context for SI/power review.
-            "SCHEMATIC EXTRACTION NOTES (truncated for token efficiency):\n"
-            f"{schematic_description[:4500]}"
-            + ("\n... [truncated]" if len(schematic_description) > 4500 else "")
+            "something can't be confirmed from the notes, say so rather "
+            "than guessing.\n\n"
+            "REFERENCES: end EVERY issue/finding bullet with a line of the "
+            "form 'Relevant reference: <source>', naming a well-known "
+            "standard, textbook, or manufacturer guideline that supports "
+            "the point (e.g. IPC-2221B, IPC-2141A, CISPR 32, IEC 61000-4-2, "
+            "Ott 'Electromagnetic Compatibility Engineering', Johnson & "
+            "Graham 'High-Speed Digital Design', Bogatin 'Signal and Power "
+            "Integrity - Simplified', or the relevant IC datasheet). Cite "
+            "only sources you are confident exist; never invent document "
+            "numbers, section numbers, or URLs. If no solid reference "
+            "applies, write 'Relevant reference: general engineering "
+            "practice'.\n"
+            f"{notes_block}\nSCHEMATIC EXTRACTION NOTES:\n{schematic_description}"
         ),
         expected_output=(
             "A markdown report with Signal Integrity, Power and Ground "
             "Loops, and Common Mode Coupling subsections, each listing "
-            "specific issues and concrete fixes."
+            "specific issues and concrete fixes, every one ending with a "
+            "'Relevant reference: ...' line."
         ),
         agent=agents["engineering_analyst"],
         context=[task_components],
         async_execution=True,
     )
-
-
 
     task_reporting = Task(
         description=(
@@ -156,18 +161,38 @@ def build_tasks(
             "## Common Mode Coupling Analysis\n"
             "## Design Costing Estimate\n"
             "## Hardware Availability Assessment\n"
-            "## Prioritized Recommendations\n\n"
+            "## Prioritized Recommendations\n"
+            "## References\n\n"
             "Preserve verified DigiKey/Mouser source URLs in the component "
             "and costing sections. All prices must remain in PKR. Clearly "
             "label live/listing values versus estimates. The Executive "
             "Summary should be 4-6 sentences. Prioritized Recommendations "
             "should be a numbered list, highest impact first, based on all "
-            "other sections."
+            "other sections.\n\n"
+            "REFERENCES RULES: every bullet or numbered point in the three "
+            "analysis sections, Hardware Availability Assessment, and "
+            "Prioritized Recommendations must end with "
+            "'Relevant reference: [n]', where [n] is the number of the "
+            "matching entry in the final '## References' section. Build "
+            "that section as a numbered list of every source cited, each "
+            "entry giving the title/standard name, author or publisher, "
+            "and what it supports. Carry over the 'Relevant reference' "
+            "sources from the Engineering Analyst, and include any "
+            "verified DigiKey/Mouser URLs the Component Locator found "
+            "(use them for component/costing/availability points). Only "
+            "cite sources that appear in the other agents' outputs or that "
+            "you are confident exist (standards, textbooks, datasheets); "
+            "never fabricate URLs, document numbers, or page/section "
+            "numbers. Points with no solid source use "
+            "'Relevant reference: general engineering practice' and need "
+            "no numbered entry."
         ),
         expected_output=(
             "A complete markdown document following the exact heading "
-            "structure specified above, including PKR costing and "
-            "DigiKey/Mouser source links where verified."
+            "structure specified above, including PKR costing, "
+            "DigiKey/Mouser source links where verified, a "
+            "'Relevant reference: [n]' marker on each point, and a "
+            "numbered '## References' section at the end."
         ),
         agent=agents["reporting_agent"],
         context=[task_components, task_costing, task_availability, task_engineering],
